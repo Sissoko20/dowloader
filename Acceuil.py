@@ -1,41 +1,52 @@
 import streamlit as st
 from yt_dlp import YoutubeDL
+import shutil
 import os
 from utils import clear_downloads, get_downloads
 
-st.set_page_config(page_title="Téléchargeur YouTube", layout="centered")
+# Vérification de ffmpeg
+FFMPEG_FOUND = shutil.which("ffmpeg") is not None
 
-st.title("🎧 Téléchargeur YouTube")
+st.set_page_config(page_title="🎧 Téléchargeur YouTube", layout="centered")
 
-url = st.text_input("🔗 Lien YouTube")
+# Design mobile-friendly
+st.markdown("<h1 style='text-align: center;'>🎧 Téléchargeur YouTube</h1>", unsafe_allow_html=True)
 
-mode = st.radio("🎯 Choix du format :", ["Audio (mp3)", "Vidéo (mp4)"])
+url = st.text_input("🔗 Entrez le lien YouTube")
 
-if st.button("Télécharger"):
-    if not url:
-        st.warning("Veuillez entrer un lien valide")
+mode = st.radio("🎯 Choix du format :", ["Audio (mp3)", "Vidéo (mp4)"], horizontal=True)
+
+if st.button("🚀 Télécharger"):
+    if not url.strip():
+        st.warning("⚠️ Veuillez entrer un lien YouTube valide")
     else:
         format = "mp3" if "Audio" in mode else "mp4"
 
-        # Configuration yt-dlp
+        ydl_opts = {
+            'outtmpl': 'downloads/%(title)s.%(ext)s',
+            'progress_hooks': [],
+            'quiet': True,
+            'noplaylist': True,
+            'postprocessors': []
+        }
+
+        # Configuration selon le format
         if format == "mp3":
-            ydl_opts = {
-                'format': 'bestaudio/best',
-                'outtmpl': 'downloads/%(title)s.%(ext)s',
-                'postprocessors': [{
+            ydl_opts['format'] = 'bestaudio/best'
+            if FFMPEG_FOUND:
+                ydl_opts['postprocessors'].append({
                     'key': 'FFmpegExtractAudio',
                     'preferredcodec': 'mp3',
                     'preferredquality': '192',
-                }],
-                'progress_hooks': [],
-            }
+                })
+            else:
+                st.warning("⚠️ ffmpeg non détecté. Fichier audio original sera téléchargé sans conversion.")
         else:
-            ydl_opts = {
-                'format': 'bestvideo+bestaudio/best',
-                'outtmpl': 'downloads/%(title)s.%(ext)s',
-                'merge_output_format': 'mp4',
-                'progress_hooks': [],
-            }
+            ydl_opts['format'] = 'bestvideo+bestaudio/best'
+            if FFMPEG_FOUND:
+                ydl_opts['merge_output_format'] = 'mp4'
+            else:
+                st.warning("⚠️ ffmpeg non détecté. Le fichier vidéo sera téléchargé dans son format source.")
 
         # Barre de progression
         progress_text = st.empty()
@@ -49,20 +60,23 @@ if st.button("Télécharger"):
                     percent = int(downloaded / total * 100)
                     bar.progress(min(percent, 100))
                     progress_text.text(f"⏳ Téléchargement... {percent}%")
-
-            if d['status'] == 'finished':
-                progress_text.text("✅ Terminé. Conversion en cours...")
+            elif d['status'] == 'finished':
+                progress_text.text("✅ Téléchargement terminé. Traitement en cours...")
 
         ydl_opts['progress_hooks'] = [hook]
 
-        with YoutubeDL(ydl_opts) as ydl:
-            try:
-                ydl.download([url])
-                st.success("✅ Téléchargement et conversion terminés")
-            except Exception as e:
-                st.error(f"Erreur : {e}")
+        # Téléchargement
+        try:
+            with YoutubeDL(ydl_opts) as ydl:
+                info = ydl.extract_info(url, download=True)
+                st.success(f"✅ Fichier téléchargé : {info['title']}")
+        except Exception as e:
+            if 'Video unavailable' in str(e):
+                st.error("🚫 La vidéo est indisponible. Elle a peut-être été supprimée ou restreinte.")
+            else:
+                st.error(f"❌ Erreur lors du téléchargement : {str(e)}")
 
-# Vider les téléchargements
+# Nettoyage des téléchargements
 if st.button("🧹 Vider les téléchargements"):
     clear_downloads()
-    st.success("Dossier vidé !")
+    st.success("✅ Dossier vidé !")
