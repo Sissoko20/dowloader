@@ -8,6 +8,34 @@ os.makedirs(DOWNLOADS_DIR, exist_ok=True)
 st.set_page_config(page_title="Téléchargeur YouTube Mobile", layout="centered")
 st.title("📱 Téléchargeur YouTube Mobile")
 
+# Injecter le manifest et le service worker
+st.markdown("""
+<link rel="manifest" href="/manifest.json">
+<script>
+  if ('serviceWorker' in navigator) {
+    navigator.serviceWorker.register('/service-worker.js');
+  }
+</script>
+""", unsafe_allow_html=True)
+
+# 🔍 Recherche YouTube
+search_query = st.text_input("🔎 Rechercher une vidéo YouTube")
+
+if search_query:
+    with YoutubeDL({'quiet': True}) as ydl:
+        try:
+            results = ydl.extract_info(f"ytsearch5:{search_query}", download=False)['entries']
+            st.subheader("🎯 Résultats de recherche")
+            for video in results:
+                st.markdown(f"**{video['title']}**")
+                st.video(video['webpage_url'])
+                if st.button(f"Télécharger {video['title']}", key=video['id']):
+                    url = video['webpage_url']
+        except Exception as e:
+            st.error("❌ Erreur lors de la recherche.")
+            st.exception(e)
+
+# 🔗 Téléchargement direct
 url = st.text_input("🔗 Lien YouTube (vidéo ou playlist)")
 mode = st.radio("🎯 Format souhaité :", ["Audio (.webm)", "Vidéo (.mp4)"])
 
@@ -32,7 +60,7 @@ if st.button("📥 Télécharger"):
             st.error("❌ Une erreur est survenue.")
             st.exception(e)
 
-# Liste des fichiers téléchargés
+# 📁 Liste des fichiers téléchargés
 st.subheader("📁 Fichiers disponibles")
 files = os.listdir(DOWNLOADS_DIR)
 if files:
@@ -44,7 +72,7 @@ if files:
 else:
     st.write("Aucun fichier téléchargé.")
 
-# Nettoyage
+# 🧹 Nettoyage
 if st.button("🧹 Vider les téléchargements"):
     for f in files:
         os.remove(os.path.join(DOWNLOADS_DIR, f))
